@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Networking;
@@ -18,7 +19,8 @@ namespace Anaglyph.DisplayCapture{
 		private bool saveFrames = false;
 		private bool SEND_TO_SERVER = true;
 
-		private string serverAddress = "https://192.168.1.49:8443";
+		private string port = "8443";
+		private string serverIP = "192.168.137.1";
 
 		public RawImage rawImage;  // Reference to the RawImage component
     	private int imageIndex = 0; // Counter to give unique names to saved images
@@ -86,7 +88,7 @@ namespace Anaglyph.DisplayCapture{
 			if (saveFrames){
 				byte[] imgBytes = GetImageBytes();
 				if (SEND_TO_SERVER)
-					StartCoroutine(SendImageToServer(imgBytes));
+					SendImageToServer(imgBytes);
 				else
 					SaveImageToFile(imgBytes);
 			}
@@ -98,13 +100,14 @@ namespace Anaglyph.DisplayCapture{
 			}
 		}
 
-		IEnumerator SendImageToServer(byte[] img){
+		async private void SendImageToServer(byte[] img){
+			string serverAddress = "https://" + serverIP + ":" + port;
 			var www = new UnityWebRequest(serverAddress, "GET");	
 			www.certificateHandler = new BypassCertificate();
 			www.uploadHandler = new UploadHandlerRaw(img);
 			www.downloadHandler = new DownloadHandlerBuffer();
-
-			yield return www.SendWebRequest();
+			
+			await Task.Run(() => www.SendWebRequest());
 			Debug.Log(www.isDone);
 			Debug.Log(www.result);
 			Debug.Log(www.downloadedBytes);
