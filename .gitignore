@@ -588,3 +588,7 @@ FodyWeavers.xsd
 
 
 # Own
+Library/*
+.vscode/*
+Logs/*
+Temp/*
