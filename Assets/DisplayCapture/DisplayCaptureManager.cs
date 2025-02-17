@@ -88,7 +88,7 @@ namespace Anaglyph.DisplayCapture{
 			if (saveFrames){
 				byte[] imgBytes = GetImageBytes();
 				if (SEND_TO_SERVER)
-					SendImageToServer(imgBytes);
+					StartCoroutine(SendImageToServer(imgBytes));
 				else
 					SaveImageToFile(imgBytes);
 			}
@@ -100,24 +100,22 @@ namespace Anaglyph.DisplayCapture{
 			}
 		}
 
-		async private void SendImageToServer(byte[] img){
+		IEnumerator SendImageToServer(byte[] img){
 			string serverAddress = "https://" + serverIP + ":" + port;
-			var www = new UnityWebRequest(serverAddress, "GET");	
-			www.certificateHandler = new BypassCertificate();
+			var www = new UnityWebRequest(serverAddress, "POST");	
 			www.uploadHandler = new UploadHandlerRaw(img);
 			www.downloadHandler = new DownloadHandlerBuffer();
-			
-			await Task.Run(() => www.SendWebRequest());
-			Debug.Log(www.isDone);
-			Debug.Log(www.result);
-			Debug.Log(www.downloadedBytes);
-			Debug.Log(www.downloadHandler.text);
+			www.certificateHandler = new BypassCertificate();
+			www.SetRequestHeader("Content-Type", "application/octet-stream");
 
-			Debug.Log("Sending image to server...");
-			if (www.result == UnityWebRequest.Result.Success)
-				Debug.Log("Image sent successfully.");
+			Debug.Log("Sending " + img.Length + " bytes to server...");
+			yield return www.SendWebRequest();
+
+			if (www.result == UnityWebRequest.Result.Success){
+				Debug.Log("Error While Sending: " + www.error);
+			}
 			else{
-                string error = www.error;
+				string error = www.error;
 				if (www.error == null)
 					error = "(Error code null: " + www.responseCode;
 				Debug.LogError("Error sending image to server: " + error + ")");
@@ -138,7 +136,8 @@ namespace Anaglyph.DisplayCapture{
 			}
 
 			Texture2D texture = (Texture2D)rawImage.texture;
-			byte[] bytes = texture.EncodeToPNG();
+			byte[] bytes = texture.GetRawTextureData();
+			// byte[] bytes = texture.EncodeToPNG();
 			return bytes;
 		}
 
