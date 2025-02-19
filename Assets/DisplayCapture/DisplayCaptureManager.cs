@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
@@ -16,14 +17,14 @@ namespace Anaglyph.DisplayCapture{
 		public bool startScreenCaptureOnStart = true;
 		public bool flipTextureOnGPU = false;
 
-		private bool saveFrames = false;
-		private bool SEND_TO_SERVER = true;
+		private bool saveFrames = false; //* Save frames lcoally
+		private bool SEND_TO_SERVER = true; //* Send frames to server
 
 		private string port = "8443";
-		private string serverIP = "192.168.137.1";
+		private string serverIP = "192.168.1.22"; //* Equal to the local IP printed out from server
 
-		public RawImage rawImage;  // Reference to the RawImage component
-    	private int imageIndex = 0; // Counter to give unique names to saved images
+		public RawImage rawImage; 
+    	private int imageIndex = 0;
 
 		[SerializeField] private Vector2Int textureSize = new(1024, 1024);
 		public Vector2Int Size => textureSize;
@@ -84,6 +85,7 @@ namespace Anaglyph.DisplayCapture{
 			bufferSize = Size.x * Size.y * 4; // RGBA_8888 format: 4 bytes per pixel
 		}
 
+		//TODO: Maybe don't run on each update (?), but i don't know when instead 
         private void Update(){
 			if (saveFrames){
 				byte[] imgBytes = GetImageBytes();
@@ -94,13 +96,24 @@ namespace Anaglyph.DisplayCapture{
 			}
         }
 
+		//* Just ignore any certificate PLEASE
 		public class BypassCertificate : CertificateHandler{
 			protected override bool ValidateCertificate(byte[] certificateData){
 				return true;
 			}
 		}
 
+		//* This variable is only a workaround, in the ideal world it should not be necessary
+		private bool sending = false; //* Global variable to limit sending. This also prevents crashing from buffer overflow
 		IEnumerator SendImageToServer(byte[] img){
+			//* Prevent sending grayed images (no texture). This gray textures can also happen  
+			//* for a middle frame because it can catch when the texture is being updated
+			bool allElementsAreSame = img.AsEnumerable().All(b => b == img[0]);
+			if (allElementsAreSame){
+				Debug.LogWarning("All elements in the image are the same. Skipping this frame.");
+				yield break;
+			}
+
 			string serverAddress = "https://" + serverIP + ":" + port;
 			var www = new UnityWebRequest(serverAddress, "POST");	
 			www.uploadHandler = new UploadHandlerRaw(img);
@@ -108,11 +121,20 @@ namespace Anaglyph.DisplayCapture{
 			www.certificateHandler = new BypassCertificate();
 			www.SetRequestHeader("Content-Type", "application/octet-stream");
 
+			//* Same as before
+			if (sending){
+				Debug.LogWarning("Already sending an image to server. Skipping this frame.");
+				yield break;
+			}
+			sending = true;
 			Debug.Log("Sending " + img.Length + " bytes to server...");
 			yield return www.SendWebRequest();
 
+			//* This success log happens once every (i did not counted them) frames
+			//TODO: THIS IS THE PROBLEM. PROBABLY THE HTTPS SERVER IN PYTHON IS NOT
+			//TODO: RESPONDING FAST ENOUGH OR THE TRANSMISSION IS SLOW (DUNNO)
 			if (www.result == UnityWebRequest.Result.Success){
-				Debug.Log("Error While Sending: " + www.error);
+				Debug.Log("Image sent to server successfully.");
 			}
 			else{
 				string error = www.error;
@@ -120,8 +142,10 @@ namespace Anaglyph.DisplayCapture{
 					error = "(Error code null: " + www.responseCode;
 				Debug.LogError("Error sending image to server: " + error + ")");
 			}
+			sending = false;
 		}
 
+		//* I've already checked by saving the byte array to a file and GetRawTextureData() is creating the right byte array
         void SaveImageToFile(byte[] img){
 			string path = Path.Combine("/storage/emulated/0/Pictures", $"frame_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.png");
 			File.WriteAllBytes(path, img);
@@ -136,7 +160,10 @@ namespace Anaglyph.DisplayCapture{
 			}
 
 			Texture2D texture = (Texture2D)rawImage.texture;
-			byte[] bytes = texture.GetRawTextureData();
+
+			//* Send raw bytes instead of PNG because it is easier to convert 
+			//* to a numpy vector in Python (PNG has the header and bla bla bla)
+			byte[] bytes = texture.GetRawTextureData(); 
 			// byte[] bytes = texture.EncodeToPNG();
 			return bytes;
 		}
