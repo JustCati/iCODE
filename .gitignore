@@ -593,3 +593,4 @@ Library/*
 Logs/*
 Temp/*
 !Packages/*
+**/frames/*
