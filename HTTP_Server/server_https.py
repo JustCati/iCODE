@@ -1,5 +1,7 @@
 import os
 import ssl
+import queue
+import threading
 from concurrent.futures import ThreadPoolExecutor
 import http.server
 import socket
@@ -17,17 +19,31 @@ KEY_FILE = "key.pem"
 
 
 
-def save_frame_to_file(frame_data, output_dir="frames"):
-    frame_data = np.frombuffer(frame_data, dtype=np.uint8)
-    frame_data = frame_data.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
-    image = Image.fromarray(frame_data)
-    print("Created image from frame data.")
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    filename = os.path.join(output_dir, "frame_{}.png".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")))
-    image.save(filename, "PNG")
-    print("Saved frame to", filename)
+
+def save_frame_to_file_worker():
+    while True:
+        frame_data = frame_queue.get()
+        try:
+            frame_array = np.frombuffer(frame_data, dtype=np.uint8)
+            frame_array = frame_array.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
+            image = Image.fromarray(frame_array)
+            print("Created image from frame data.")
+
+            output_dir = "frames"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            filename = os.path.join(
+                output_dir,
+                "frame_{}.png".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+            )
+            image.save(filename, "PNG")
+            print("Saved frame to", filename)
+        except Exception as e:
+            print("Error processing frame:", e)
+        finally:
+            frame_queue.task_done()
  
 
 class FrameRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -43,8 +59,7 @@ class FrameRequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(b"OK")
         print("Sent response.")
 
-        with ThreadPoolExecutor() as executor:
-            executor.submit(save_frame_to_file, frame_data)
+        frame_queue.put(frame_data)
 
 
 
@@ -58,7 +73,7 @@ def run(server_class=http.server.HTTPServer, handler_class=FrameRequestHandler, 
     context.verify_mode = ssl.CERT_NONE
     context.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-    
+
     print(f"Starting HTTPS server on port {port}...")
     try:
         httpd.serve_forever()
@@ -70,5 +85,9 @@ def run(server_class=http.server.HTTPServer, handler_class=FrameRequestHandler, 
 if __name__ == "__main__":
     local_ip = socket.gethostbyname(socket.gethostname())
     print(f"Local IP address: {local_ip}", end='\n\n')
+
+    frame_queue = queue.Queue()
+    worker_thread = threading.Thread(target=save_frame_to_file_worker, daemon=True)
+    worker_thread.start()
 
     run()
