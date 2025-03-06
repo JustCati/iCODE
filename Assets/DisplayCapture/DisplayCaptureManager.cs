@@ -2,8 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Networking;
@@ -18,15 +16,16 @@ namespace Anaglyph.DisplayCapture{
 		public bool startScreenCaptureOnStart = true;
 		public bool flipTextureOnGPU = false;
 
-		private bool saveFrames = false; //* Save frames lcoally
-		private bool SEND_TO_SERVER = true; //* Send frames to server
+		private bool saveFrames = false;
 
 		private string port = "8443";
 		private string serverIP = "192.168.1.45"; //* Equal to the local IP printed out from server
+		
+		private int FRAMERATE = 30;
+		private int MEMORY_IN_SECONDS = 40;
 		private readonly Queue<byte[]> frameQueue = new Queue<byte[]>();
 
 		public RawImage rawImage; 
-    	private int imageIndex = 0;
 
 		[SerializeField] private Vector2Int textureSize = new(1024, 1024);
 		public Vector2Int Size => textureSize;
@@ -89,16 +88,19 @@ namespace Anaglyph.DisplayCapture{
 			StartCoroutine(ProcessQueue());
 		}
 
-		//TODO: Maybe don't run on each update (?), but i don't know when instead 
-        private void Update(){
+        private float captureInterval = 1f / 30f; // 30 frames per second
+		private float timeSinceLastCapture = 0f;
+
+		private void Update(){
 			if (saveFrames){
-				byte[] imgBytes = GetImageBytes();
-				if (SEND_TO_SERVER)
+				timeSinceLastCapture += Time.deltaTime;
+				if (timeSinceLastCapture >= captureInterval){
+					timeSinceLastCapture = 0;
+					byte[] imgBytes = GetImageBytes();
 					EnqueueFrame(imgBytes);
-				else
-					SaveImageToFile(imgBytes);
+				}
 			}
-        }
+		}
 
 		//* Just ignore any certificate PLEASE
 		public class BypassCertificate : CertificateHandler{
@@ -108,12 +110,19 @@ namespace Anaglyph.DisplayCapture{
 		}
 
 		public void EnqueueFrame(byte[] img){
-			if (IsUniformImage(img) || HasOnlyTwoColors(img)){
+			if (HasOnlyTwoColors(img)){
 				Debug.LogWarning("Skipping frame: image data is uniform.");
 				return;
 			}
 
+			int maxQueueSize = FRAMERATE * MEMORY_IN_SECONDS;
+			while (frameQueue.Count >= maxQueueSize){
+				frameQueue.Dequeue();
+				Debug.LogWarning("Dropping an old frame due to queue overload.");
+			}
+
 			frameQueue.Enqueue(img);
+				frameQueue.Enqueue(img);
 		}
 
 		private IEnumerator ProcessQueue(){
@@ -125,18 +134,6 @@ namespace Anaglyph.DisplayCapture{
 				else
 					yield return null;
 			}
-		}
-
-		private bool IsUniformImage(byte[] img){
-			if (img == null || img.Length == 0)
-				return true;
-
-			byte first = img[0];
-			foreach (byte b in img){
-				if (b != first)
-					return false;
-			}
-			return true;
 		}
 
 		private bool HasOnlyTwoColors(byte[] img){
@@ -176,56 +173,6 @@ namespace Anaglyph.DisplayCapture{
 			}
 		}
 
-
-		// //* This variable is only a workaround, in the ideal world it should not be necessary
-		// private bool sending = false; //* Global variable to limit sending. This also prevents crashing from buffer overflow
-		// IEnumerator SendImageToServer(byte[] img){
-		// 	//* Prevent sending grayed images (no texture). This gray textures can also happen  
-		// 	//* for a middle frame because it can catch when the texture is being updated
-		// 	bool allElementsAreSame = img.AsEnumerable().All(b => b == img[0]);
-		// 	if (allElementsAreSame){
-		// 		Debug.LogWarning("All elements in the image are the same. Skipping this frame.");
-		// 		yield break;
-		// 	}
-
-		// 	string serverAddress = "https://" + serverIP + ":" + port;
-		// 	var www = new UnityWebRequest(serverAddress, "POST");	
-		// 	www.uploadHandler = new UploadHandlerRaw(img);
-		// 	www.downloadHandler = new DownloadHandlerBuffer();
-		// 	www.certificateHandler = new BypassCertificate();
-		// 	www.SetRequestHeader("Content-Type", "application/octet-stream");
-
-		// 	if (sending){
-		// 		Debug.LogWarning("Already sending an image to server. Skipping this frame.");
-		// 		yield break;
-		// 	}
-		// 	sending = true;
-		// 	Debug.Log("Sending " + img.Length + " bytes to server...");
-		// 	yield return www.SendWebRequest();
-
-		// 	//* This success log happens once every (i did not counted them) frames
-		// 	//TODO: THIS IS THE PROBLEM. PROBABLY THE HTTPS SERVER IN PYTHON IS NOT
-		// 	//TODO: RESPONDING FAST ENOUGH OR THE TRANSMISSION IS SLOW (DUNNO)
-		// 	if (www.result == UnityWebRequest.Result.Success){
-		// 		Debug.Log("Image sent to server successfully.");
-		// 	}
-		// 	else{
-		// 		string error = www.error;
-		// 		if (www.error == null)
-		// 			error = "(Error code null: " + www.responseCode;
-		// 		Debug.LogError("Error sending image to server: " + error + ")");
-		// 	}
-		// 	sending = false;
-		// }
-
-		//* I've already checked by saving the byte array to a file and GetRawTextureData() is creating the right byte array
-        void SaveImageToFile(byte[] img){
-			string path = Path.Combine("/storage/emulated/0/Pictures", $"frame_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.png");
-			File.WriteAllBytes(path, img);
-			Debug.Log("Saved image to: " + path);
-			imageIndex++;
-		}
-
 		byte[] GetImageBytes(){
 			if (rawImage == null || rawImage.texture == null) {
 				Debug.LogError("RawImage or its texture is null. Cannot save image.");
@@ -233,11 +180,7 @@ namespace Anaglyph.DisplayCapture{
 			}
 
 			Texture2D texture = (Texture2D)rawImage.texture;
-
-			//* Send raw bytes instead of PNG because it is easier to convert 
-			//* to a numpy vector in Python (PNG has the header and bla bla bla)
 			byte[] bytes = texture.GetRawTextureData(); 
-			// byte[] bytes = texture.EncodeToPNG();
 			return bytes;
 		}
 
@@ -252,9 +195,7 @@ namespace Anaglyph.DisplayCapture{
 			saveFrames = false;
 		}
 
-		// Messages sent from Android
-
-#pragma warning disable IDE0051 // Remove unused private members
+#pragma warning disable IDE0051
 		private unsafe void OnCaptureStarted(){
 			onStarted.Invoke();
 			imageData = androidInterface.GetByteBuffer();
@@ -279,6 +220,6 @@ namespace Anaglyph.DisplayCapture{
 		private void OnCaptureStopped(){
 			onStopped.Invoke();
 		}
-#pragma warning restore IDE0051 // Remove unused private members
+#pragma warning restore IDE0051
 	}
 }
