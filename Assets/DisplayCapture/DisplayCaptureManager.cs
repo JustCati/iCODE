@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,7 +22,8 @@ namespace Anaglyph.DisplayCapture{
 		private bool SEND_TO_SERVER = true; //* Send frames to server
 
 		private string port = "8443";
-		private string serverIP = "192.168.1.22"; //* Equal to the local IP printed out from server
+		private string serverIP = "192.168.1.45"; //* Equal to the local IP printed out from server
+		private readonly Queue<byte[]> frameQueue = new Queue<byte[]>();
 
 		public RawImage rawImage; 
     	private int imageIndex = 0;
@@ -83,6 +85,8 @@ namespace Anaglyph.DisplayCapture{
 				StartScreenCapture();
 			}
 			bufferSize = Size.x * Size.y * 4; // RGBA_8888 format: 4 bytes per pixel
+
+			StartCoroutine(ProcessQueue());
 		}
 
 		//TODO: Maybe don't run on each update (?), but i don't know when instead 
@@ -90,7 +94,7 @@ namespace Anaglyph.DisplayCapture{
 			if (saveFrames){
 				byte[] imgBytes = GetImageBytes();
 				if (SEND_TO_SERVER)
-					StartCoroutine(SendImageToServer(imgBytes));
+					EnqueueFrame(imgBytes);
 				else
 					SaveImageToFile(imgBytes);
 			}
@@ -103,47 +107,116 @@ namespace Anaglyph.DisplayCapture{
 			}
 		}
 
-		//* This variable is only a workaround, in the ideal world it should not be necessary
-		private bool sending = false; //* Global variable to limit sending. This also prevents crashing from buffer overflow
-		IEnumerator SendImageToServer(byte[] img){
-			//* Prevent sending grayed images (no texture). This gray textures can also happen  
-			//* for a middle frame because it can catch when the texture is being updated
-			bool allElementsAreSame = img.AsEnumerable().All(b => b == img[0]);
-			if (allElementsAreSame){
-				Debug.LogWarning("All elements in the image are the same. Skipping this frame.");
-				yield break;
+		public void EnqueueFrame(byte[] img){
+			if (IsUniformImage(img) || HasOnlyTwoColors(img)){
+				Debug.LogWarning("Skipping frame: image data is uniform.");
+				return;
 			}
 
-			string serverAddress = "https://" + serverIP + ":" + port;
-			var www = new UnityWebRequest(serverAddress, "POST");	
-			www.uploadHandler = new UploadHandlerRaw(img);
-			www.downloadHandler = new DownloadHandlerBuffer();
-			www.certificateHandler = new BypassCertificate();
-			www.SetRequestHeader("Content-Type", "application/octet-stream");
-
-			//* Same as before
-			if (sending){
-				Debug.LogWarning("Already sending an image to server. Skipping this frame.");
-				yield break;
-			}
-			sending = true;
-			Debug.Log("Sending " + img.Length + " bytes to server...");
-			yield return www.SendWebRequest();
-
-			//* This success log happens once every (i did not counted them) frames
-			//TODO: THIS IS THE PROBLEM. PROBABLY THE HTTPS SERVER IN PYTHON IS NOT
-			//TODO: RESPONDING FAST ENOUGH OR THE TRANSMISSION IS SLOW (DUNNO)
-			if (www.result == UnityWebRequest.Result.Success){
-				Debug.Log("Image sent to server successfully.");
-			}
-			else{
-				string error = www.error;
-				if (www.error == null)
-					error = "(Error code null: " + www.responseCode;
-				Debug.LogError("Error sending image to server: " + error + ")");
-			}
-			sending = false;
+			frameQueue.Enqueue(img);
 		}
+
+		private IEnumerator ProcessQueue(){
+			while (true){
+				if (frameQueue.Count > 0){
+					byte[] frame = frameQueue.Dequeue();
+					yield return StartCoroutine(SendFrame(frame));
+				}
+				else
+					yield return null;
+			}
+		}
+
+		private bool IsUniformImage(byte[] img){
+			if (img == null || img.Length == 0)
+				return true;
+
+			byte first = img[0];
+			foreach (byte b in img){
+				if (b != first)
+					return false;
+			}
+			return true;
+		}
+
+		private bool HasOnlyTwoColors(byte[] img){
+			if (img == null || img.Length == 0)
+				return true;
+
+			HashSet<int> distinctColors = new HashSet<int>();
+
+			for (int i = 0; i < img.Length; i += 4){
+				int color = BitConverter.ToInt32(img, i);
+				distinctColors.Add(color);
+
+				if (distinctColors.Count > 2)
+					return false;
+			}
+			return true;
+		}
+
+		private IEnumerator SendFrame(byte[] img){
+			string serverAddress = "https://" + serverIP + ":" + port;
+
+			using (UnityWebRequest www = new UnityWebRequest(serverAddress, "POST")){
+				www.uploadHandler = new UploadHandlerRaw(img);
+				www.downloadHandler = new DownloadHandlerBuffer();
+				www.certificateHandler = new BypassCertificate();
+				www.SetRequestHeader("Content-Type", "application/octet-stream");
+
+				Debug.Log("Sending " + img.Length + " bytes to server...");
+				yield return www.SendWebRequest();
+
+				if (www.result == UnityWebRequest.Result.Success){
+					Debug.Log("Frame sent successfully.");
+				}
+				else{
+					Debug.LogError("Error sending frame: " + www.error);
+				}
+			}
+		}
+
+
+		// //* This variable is only a workaround, in the ideal world it should not be necessary
+		// private bool sending = false; //* Global variable to limit sending. This also prevents crashing from buffer overflow
+		// IEnumerator SendImageToServer(byte[] img){
+		// 	//* Prevent sending grayed images (no texture). This gray textures can also happen  
+		// 	//* for a middle frame because it can catch when the texture is being updated
+		// 	bool allElementsAreSame = img.AsEnumerable().All(b => b == img[0]);
+		// 	if (allElementsAreSame){
+		// 		Debug.LogWarning("All elements in the image are the same. Skipping this frame.");
+		// 		yield break;
+		// 	}
+
+		// 	string serverAddress = "https://" + serverIP + ":" + port;
+		// 	var www = new UnityWebRequest(serverAddress, "POST");	
+		// 	www.uploadHandler = new UploadHandlerRaw(img);
+		// 	www.downloadHandler = new DownloadHandlerBuffer();
+		// 	www.certificateHandler = new BypassCertificate();
+		// 	www.SetRequestHeader("Content-Type", "application/octet-stream");
+
+		// 	if (sending){
+		// 		Debug.LogWarning("Already sending an image to server. Skipping this frame.");
+		// 		yield break;
+		// 	}
+		// 	sending = true;
+		// 	Debug.Log("Sending " + img.Length + " bytes to server...");
+		// 	yield return www.SendWebRequest();
+
+		// 	//* This success log happens once every (i did not counted them) frames
+		// 	//TODO: THIS IS THE PROBLEM. PROBABLY THE HTTPS SERVER IN PYTHON IS NOT
+		// 	//TODO: RESPONDING FAST ENOUGH OR THE TRANSMISSION IS SLOW (DUNNO)
+		// 	if (www.result == UnityWebRequest.Result.Success){
+		// 		Debug.Log("Image sent to server successfully.");
+		// 	}
+		// 	else{
+		// 		string error = www.error;
+		// 		if (www.error == null)
+		// 			error = "(Error code null: " + www.responseCode;
+		// 		Debug.LogError("Error sending image to server: " + error + ")");
+		// 	}
+		// 	sending = false;
+		// }
 
 		//* I've already checked by saving the byte array to a file and GetRawTextureData() is creating the right byte array
         void SaveImageToFile(byte[] img){
