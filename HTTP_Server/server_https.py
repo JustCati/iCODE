@@ -37,14 +37,12 @@ class FrameRequestHandler(http.server.BaseHTTPRequestHandler):
         frame_data = self.rfile.read(BYTE_SIZE)
         print(f"Received frame ({len(frame_data)} bytes).")
 
-        #TODO: maybe this needs to be faster (?)
         self.send_response(200)
         self.end_headers()
         self.flush_headers()
         self.wfile.write(b"OK")
         print("Sent response.")
 
-        # Thread so it doesn't block the server
         with ThreadPoolExecutor() as executor:
             executor.submit(save_frame_to_file, frame_data)
 
