@@ -19,10 +19,10 @@ namespace Anaglyph.DisplayCapture{
 		private bool saveFrames = false;
 
 		private string port = "8443";
-		private string serverIP = "192.168.1.45"; //* Equal to the local IP printed out from server
-		
+		private string serverIP = "192.168.1.23"; //* Equal to the local IP printed out from server
+
 		private int FRAMERATE = 30;
-		private int MEMORY_IN_SECONDS = 40;
+		private int MEMORY_IN_SECONDS = 60;
 		private readonly Queue<byte[]> frameQueue = new Queue<byte[]>();
 
 		public RawImage rawImage; 
@@ -110,8 +110,8 @@ namespace Anaglyph.DisplayCapture{
 		}
 
 		public void EnqueueFrame(byte[] img){
-			if (HasOnlyTwoColors(img)){
-				Debug.LogWarning("Skipping frame: image data is uniform.");
+			if (img == null || img.Length == 0){
+				Debug.LogWarning("Skipping frame: image data is empty.");
 				return;
 			}
 
@@ -122,7 +122,7 @@ namespace Anaglyph.DisplayCapture{
 			}
 
 			frameQueue.Enqueue(img);
-				frameQueue.Enqueue(img);
+			Debug.Log("Frame enqueued with bytes: " + img.Length + ". Queue size: " + frameQueue.Count);
 		}
 
 		private IEnumerator ProcessQueue(){
@@ -180,8 +180,11 @@ namespace Anaglyph.DisplayCapture{
 			}
 
 			Texture2D texture = (Texture2D)rawImage.texture;
-			byte[] bytes = texture.GetRawTextureData(); 
-			return bytes;
+			if (HasOnlyTwoColors(texture.GetRawTextureData())){
+				Debug.LogWarning("Skipping frame: image data is uniform.");
+				return null;
+			}
+			return texture.EncodeToJPG(50);
 		}
 
 
