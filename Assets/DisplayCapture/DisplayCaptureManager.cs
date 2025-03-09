@@ -125,11 +125,29 @@ namespace Anaglyph.DisplayCapture{
 			Debug.Log("Frame enqueued with bytes: " + img.Length + ". Queue size: " + frameQueue.Count);
 		}
 
+
 		private IEnumerator ProcessQueue(){
+			int batchSize = 30;
 			while (true){
-				if (frameQueue.Count > 0){
-					byte[] frame = frameQueue.Dequeue();
-					yield return StartCoroutine(SendFrame(frame));
+				if (frameQueue.Count >= batchSize){
+					byte[] batchData;
+					using (MemoryStream ms = new MemoryStream()){
+						int numFrames = batchSize;
+						byte[] numFramesBytes = BitConverter.GetBytes(numFrames);
+						if (BitConverter.IsLittleEndian) Array.Reverse(numFramesBytes);
+						ms.Write(numFramesBytes, 0, 4);
+
+						for (int i = 0; i < batchSize; i++){
+							byte[] frame = frameQueue.Dequeue();
+							byte[] frameLengthBytes = BitConverter.GetBytes(frame.Length);
+							if (BitConverter.IsLittleEndian) Array.Reverse(frameLengthBytes);
+							ms.Write(frameLengthBytes, 0, 4);
+							ms.Write(frame, 0, frame.Length);
+						}
+						batchData = ms.ToArray();
+					}
+
+					yield return StartCoroutine(SendFrame(batchData));
 				}
 				else
 					yield return null;
