@@ -1,4 +1,6 @@
 import os
+import io
+import sys
 import ssl
 import queue
 import threading
@@ -8,11 +10,6 @@ import socket
 from PIL import Image
 import datetime
 import numpy as np
-
-
-IMG_WIDTH = 1024
-IMG_HEIGHT = 1024
-BYTE_SIZE = IMG_WIDTH * IMG_HEIGHT * 4 # 4 bytes per pixel (RGBA)
 
 CERT_FILE = "cert.pem"
 KEY_FILE = "key.pem"
@@ -25,10 +22,8 @@ def save_frame_to_file_worker():
     while True:
         frame_data = frame_queue.get()
         try:
-            frame_array = np.frombuffer(frame_data, dtype=np.uint8)
-            frame_array = frame_array.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
-            image = Image.fromarray(frame_array)
-            print("Created image from frame data.")
+            data = io.BytesIO(frame_data)
+            image = Image.open(data)
 
             output_dir = "frames"
             if not os.path.exists(output_dir):
@@ -50,7 +45,8 @@ class FrameRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         print()
         print("Received POST request.")
-        frame_data = self.rfile.read(BYTE_SIZE)
+        content_length = int(self.headers.get('Content-Length', 0))
+        frame_data = self.rfile.read(content_length)
         print(f"Received frame ({len(frame_data)} bytes).")
 
         self.send_response(200)
