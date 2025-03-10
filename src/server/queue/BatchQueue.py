@@ -8,7 +8,8 @@ class BatchQueue(queue.Queue):
         super().__init__(maxsize=maxsize)
         self.frame_queue = frame_queue
         self.batch_queue = queue.Queue()
-        self.batch_worker_thread = threading.Thread(target=self.batch_worker, daemon=True).start()
+        self.batch_worker_thread = threading.Thread(target=self.batch_worker, daemon=True)
+        self.batch_worker_thread.start()
 
     def batch_worker(self):
         while True:
