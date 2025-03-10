@@ -70,7 +70,8 @@ def load_image(image_path, FACTOR = 4.0, device = "cpu"):
     img = Image.open(image_path)
     img = transforms.ToTensor()(img).unsqueeze(0)
 
-    new_h, new_w = int(img.shape[2] // FACTOR), int(img.shape[3] // FACTOR)
+    # new_h, new_w = int(img.shape[2] // FACTOR), int(img.shape[3] // FACTOR)
+    new_h, new_w = 1024, 1024
     img = transforms.Resize((new_h, new_w), interpolation=Image.BICUBIC)(img).to(device)
     return img
 
@@ -121,8 +122,7 @@ def main(cfg, args):
 
         frames = []
         with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
-            frames = list(executor.map(lambda x: load_image(os.path.join(video_path, x), 2.0, device), 
-                                       frames_paths))
+            frames = list(executor.map(lambda x: load_image(os.path.join(video_path, x), 2.0, device), frames_paths))
 
         with torch.no_grad(), torch.autocast(device_type="cuda"):
             output = model(torch.cat(frames, dim=0))
