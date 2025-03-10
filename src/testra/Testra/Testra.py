@@ -16,7 +16,6 @@ class Testra(nn.Module):
 
         self.cfg = cfg
         self.queue = frame_queue
-
         self.device = setup_environment(cfg)
         checkpointer = setup_checkpointer(cfg, phase='test')
 
@@ -57,7 +56,9 @@ class Testra(nn.Module):
 
             frames = torch.stack(frames, dim=0)
             with torch.no_grad(), torch.autocast(device_type="cuda"):
-                output = self.model(frames)
+                output = self(frames)
             output = torch.softmax(output, dim=1)
             results = output.cpu().numpy()[0]
-            print(results)
+
+            max_indices = results.argmax(axis=1)
+            print(max_indices)
