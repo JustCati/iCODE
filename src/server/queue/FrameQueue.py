@@ -5,15 +5,13 @@ import threading
 class FrameQueue(queue.Queue):
     def __init__(self, maxsize):
         super().__init__(maxsize=maxsize)
-        self.lock = threading.Lock()
-        self.frame_queue = queue.Queue()
+
 
     def dequeue_batch(self, num_frames):
         batch = []
 
-        with self.lock:
-            for _ in range(num_frames):
-                item = self.get()
-                batch.append(item)
-                self.task_done()
+        for _ in range(num_frames):
+            item = self.get()
+            batch.append(item)
+            self.task_done()
         return batch
