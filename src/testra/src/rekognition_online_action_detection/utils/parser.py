@@ -40,7 +40,6 @@ def parse_args():
 def assert_and_infer_cfg(cfg, args):
     # Setup the visible devices
     cfg.GPU = args.gpu
-    cfg.SAVE = args.save
 
     # Infer data info
     with open(cfg.DATA.DATA_INFO, 'r') as f:
@@ -65,9 +64,7 @@ def assert_and_infer_cfg(cfg, args):
     cfg.DATA.TRAIN_SESSION_SET = data_info['train_session_set'] if cfg.DATA.TRAIN_SESSION_SET is None else cfg.DATA.TRAIN_SESSION_SET
     cfg.DATA.TEST_SESSION_SET = data_info['test_session_set'] if cfg.DATA.TEST_SESSION_SET is None else cfg.DATA.TEST_SESSION_SET
 
-    print(f"Data root: {cfg.DATA.DATA_ROOT}")
     cfg.DATA.DATA_ROOT = osp.join(osp.dirname(cfg.DATA.DATA_ROOT), f"{cfg.DATA.FPS}fps")
-    print(f"Data root: {cfg.DATA.DATA_ROOT}")
 
     # Input assertions
     if cfg.INPUT.MODALITY == 'twostream':
