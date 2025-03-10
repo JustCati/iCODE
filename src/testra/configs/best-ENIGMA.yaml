@@ -2,6 +2,7 @@ DATA:
   DATA_NAME: 'ENIGMA'
   CLIP_MIXUP_RATE: 0.5
   CLIP_MIXUP_SAMPLE: 'uniform'
+  DATA_INFO: 'src/testra/data/data_info.json'
 INPUT:
   MODALITY: 'visual'
   VISUAL_FEATURE: 'DINOv2'
