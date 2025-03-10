@@ -1,3 +1,4 @@
+import os
 import ssl
 import socket
 import http.server
@@ -9,8 +10,8 @@ from src.server.queue.BatchQueue import BatchQueue
 class Server():
     def __init__(self, port=8443, max_queue_size=10000):
         self.port = port
-        self.KEY_FILE = "key.pem"
-        self.CERT_FILE = "cert.pem"
+        self.KEY_FILE = os.path.join("cert", "key.pem")
+        self.CERT_FILE = os.path.join("cert", "cert.pem")
         self.max_queue_size = max_queue_size
 
         self.frame_queue = FrameQueue(max_queue_size)
