@@ -31,10 +31,11 @@ class Server():
             self.wfile.write(b"OK")
             print("Sent response.")
 
-            self.batch_queue.put(frame_data)
+            self.__class__.batch_queue.put(frame_data)
 
 
     def run(self, server_class=http.server.HTTPServer, handler_class=FrameRequestHandler, port=8443):
+        handler_class.batch_queue = self.batch_queue
         local_ip = socket.gethostbyname(socket.gethostname())
         server_address = (local_ip, port)
         httpd = server_class(server_address, handler_class)
