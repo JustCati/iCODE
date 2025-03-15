@@ -19,7 +19,7 @@ namespace Anaglyph.DisplayCapture{
 		private bool saveFrames = false;
 
 		private string port = "8443";
-		private string serverIP = "192.168.1.23"; //* Equal to the local IP printed out from server
+		private string serverIP = "192.168.1.101"; //* Equal to the local IP printed out from server
 
 		private int FRAMERATE = 30;
 		private int MEMORY_IN_SECONDS = 60;
@@ -127,7 +127,7 @@ namespace Anaglyph.DisplayCapture{
 
 
 		private IEnumerator ProcessQueue(){
-			int batchSize = 30;
+			int batchSize = 60;
 			while (true){
 				if (frameQueue.Count >= batchSize){
 					byte[] batchData;
