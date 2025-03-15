@@ -19,20 +19,23 @@ def main(cfg):
     cert_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "server", "server", "cert", "cert.pem")
 
     server = Server(key_file, cert_file, port=8443, max_queue_size=10000)
-    server_thread = threading.Thread(target=server.run, daemon=True)
-    server_thread.start()
 
     frame_queue = server.get_frame_queue()
     model = Testra(cfg, frame_queue)
 
     try:
+        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread.start()
+
         model_thread = threading.Thread(target=model.model_worker, daemon=True)
         model_thread.start()
+
         model_thread.join()
     except KeyboardInterrupt:
         model_thread.join()
         server_thread.join()
         server.batch_queue.batch_worker_thread.join()
+
         print("Server has been shut down.")
         print("Model has been shut down.")
         exit(0)

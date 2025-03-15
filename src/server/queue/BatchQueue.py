@@ -7,13 +7,14 @@ class BatchQueue(queue.Queue):
     def __init__(self, frame_queue, maxsize):
         super().__init__(maxsize=maxsize)
         self.frame_queue = frame_queue
-        self.batch_queue = queue.Queue()
+
         self.batch_worker_thread = threading.Thread(target=self.batch_worker, daemon=True)
         self.batch_worker_thread.start()
 
+
     def batch_worker(self):
         while True:
-            data = self.batch_queue.get()
+            data = self.get()
             try:
                 if len(data) < 4:
                     print("Received batch data is too short to contain header.")
@@ -45,4 +46,4 @@ class BatchQueue(queue.Queue):
             except Exception as e:
                 print("Error unbatching data:", e)
             finally:
-                self.batch_queue.task_done()
+                self.task_done()
