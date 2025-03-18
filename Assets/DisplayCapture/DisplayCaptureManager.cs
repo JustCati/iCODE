@@ -96,7 +96,6 @@ namespace Anaglyph.DisplayCapture{
 			bufferSize = Size.x * Size.y * 4; // RGBA_8888 format: 4 bytes per pixel
 
 			listener = new HttpListener();
-			// The URL prefix must match the callback URL used by the server.
 			listener.Prefixes.Add($"http://*:{listenPort}/callback/");
 			listener.Start();
 
