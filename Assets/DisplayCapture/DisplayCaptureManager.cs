@@ -18,7 +18,7 @@ namespace Anaglyph.DisplayCapture{
 
 		private bool saveFrames = false;
 
-		private string port = "8443";
+		private string port = "34545";
 		private string serverIP = "192.168.1.101"; //* Equal to the local IP printed out from server
 
 		private int FRAMERATE = 30;
