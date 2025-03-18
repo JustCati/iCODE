@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Networking;
@@ -18,8 +20,16 @@ namespace Anaglyph.DisplayCapture{
 
 		private bool saveFrames = false;
 
+		public int listenPort = 4444;
+
 		private string port = "34545";
 		private string serverIP = "192.168.1.101"; //* Equal to the local IP printed out from server
+
+		
+		private HttpListener listener;
+		private Thread listenerThread;
+		public string localIP;
+
 
 		private int FRAMERATE = 30;
 		private int MEMORY_IN_SECONDS = 60;
@@ -85,8 +95,61 @@ namespace Anaglyph.DisplayCapture{
 			}
 			bufferSize = Size.x * Size.y * 4; // RGBA_8888 format: 4 bytes per pixel
 
+			listener = new HttpListener();
+			// The URL prefix must match the callback URL used by the server.
+			listener.Prefixes.Add($"http://*:{listenPort}/callback/");
+			listener.Start();
+
+			listenerThread = new Thread(ListenerLoop);
+			listenerThread.IsBackground = true;
+			listenerThread.Start();
+
+			Debug.Log("CallbackReceiver started, listening on port " + listenPort);
+
 			StartCoroutine(ProcessQueue());
 		}
+
+
+		public class CallbackData{
+			public string timestamp;
+			public int action;
+		}
+
+		void ProcessRequest(HttpListenerContext context){
+			string body;
+			using (var reader = new System.IO.StreamReader(context.Request.InputStream, context.Request.ContentEncoding))
+				body = reader.ReadToEnd();
+			Debug.Log("Received callback: " + body);
+
+			CallbackData data = JsonUtility.FromJson<CallbackData>(body);
+			Debug.Log($"Timestamp: {data.timestamp}, Action: {data.action}");
+
+			// // Example: Trigger an event if action == 1
+			// if (data.action == 1 && onTargetAction != null)
+			// {
+			// 	onTargetAction.Invoke();
+			// }
+
+			byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes("Received");
+			context.Response.ContentLength64 = responseBytes.Length;
+			context.Response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
+			context.Response.OutputStream.Close();
+		}
+
+
+		void ListenerLoop(){
+			while (listener.IsListening){
+				try{
+					HttpListenerContext context = listener.GetContext();
+					ProcessRequest(context);
+				}
+				catch (Exception ex){
+					Debug.LogError("Listener error: " + ex.Message);
+				}
+			}
+		}
+
+
 
         private float captureInterval = 1f / 30f; // 30 frames per second
 		private float timeSinceLastCapture = 0f;
