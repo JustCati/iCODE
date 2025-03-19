@@ -1,14 +1,12 @@
 using UnityEngine;
 
-public class ThreeDotMenu : MonoBehaviour
-{
+public class ThreeDotMenu : MonoBehaviour{
     [Header("Assign the panel you want to show/hide")]
     public GameObject canvasPanelVariant;
 
     private bool isPanelVisible = true;
 
-    public void ToggleMenu()
-    {
+    public void ToggleMenu(){
         isPanelVisible = !isPanelVisible;
 
         if (isPanelVisible)
