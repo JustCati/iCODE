@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading;
+using PimDeWitte.UnityMainThreadDispatcher;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Networking;
@@ -17,6 +18,8 @@ namespace Anaglyph.DisplayCapture{
 
 		public bool startScreenCaptureOnStart = true;
 		public bool flipTextureOnGPU = false;
+
+		public MessageDisplay messageDisplay;
 
 		private bool saveFrames = false;
 
@@ -110,8 +113,8 @@ namespace Anaglyph.DisplayCapture{
 
 
 		public class CallbackData{
-			public string timestamp;
-			public int action;
+			public string action;
+			public string active_object;
 		}
 
 		void ProcessRequest(HttpListenerContext context){
@@ -121,13 +124,13 @@ namespace Anaglyph.DisplayCapture{
 			Debug.Log("Received callback: " + body);
 
 			CallbackData data = JsonUtility.FromJson<CallbackData>(body);
-			Debug.Log($"Timestamp: {data.timestamp}, Action: {data.action}");
+			Debug.Log($"Action: {data.action}, Active object: {data.active_object}");
 
-			// // Example: Trigger an event if action == 1
-			// if (data.action == 1 && onTargetAction != null)
-			// {
-			// 	onTargetAction.Invoke();
-			// }
+			string text = "In the previous second \n you had a" + data.action + " with " + data.active_object;
+			UnityMainThreadDispatcher.Instance().Enqueue(() =>{
+				messageDisplay.ShowMessage(text);
+			});
+			Debug.Log("UnityMainThreadDispatcher called");
 
 			byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes("Received");
 			context.Response.ContentLength64 = responseBytes.Length;
