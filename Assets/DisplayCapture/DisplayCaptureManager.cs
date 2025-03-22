@@ -127,6 +127,8 @@ namespace Anaglyph.DisplayCapture{
 			Debug.Log($"Action: {data.action}, Active object: {data.active_object}");
 
 			string text = "In the previous second \n you had a" + data.action + " with " + data.active_object;
+			if (data.action == "UNKNOWN")
+				text = "No action detected in the previous second";
 			UnityMainThreadDispatcher.Instance().Enqueue(() =>{
 				messageDisplay.ShowMessage(text);
 			});
