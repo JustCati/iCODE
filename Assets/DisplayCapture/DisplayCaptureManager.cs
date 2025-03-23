@@ -114,7 +114,7 @@ namespace Anaglyph.DisplayCapture{
 
 		public class CallbackData{
 			public string action;
-			public string active_object;
+			public string obj;
 		}
 
 		void ProcessRequest(HttpListenerContext context){
@@ -124,9 +124,9 @@ namespace Anaglyph.DisplayCapture{
 			Debug.Log("Received callback: " + body);
 
 			CallbackData data = JsonUtility.FromJson<CallbackData>(body);
-			Debug.Log($"Action: {data.action}, Active object: {data.active_object}");
+			Debug.Log($"Action: {data.action}, Active object: {data.obj}");
 
-			string text = "In the previous second \n you had a" + data.action + " with " + data.active_object;
+			string text = "In the previous second \n you had a " + data.action + " with " + data.obj;
 			if (data.action == "UNKNOWN")
 				text = "No action detected in the previous second";
 			UnityMainThreadDispatcher.Instance().Enqueue(() =>{
